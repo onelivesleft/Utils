@@ -1,0 +1,24 @@
+if not co then
+    co = {}
+
+    -- Exposed methods:
+
+    function co.after(delay, func, ...)
+        -- Calls <func> with remaining parameters after <delay>
+        -- <delay> can be in seconds, or a function
+        -- when <delay> is a function the trigger happens when it stops being true
+        local params = {...}
+        function after_routine()
+            if type(delay) == 'function' then
+                repeat coroutine.yield(0) until not delay()
+            else
+                local after_time = os.clock() + delay
+                repeat coroutine.yield(0) until os.clock() >= after_time
+            end
+            func(unpack(params))
+            return 1
+        end
+        startLuaCoroutine(self, 'after_routine')
+    end
+
+end
