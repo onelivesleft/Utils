@@ -31,8 +31,8 @@ if not co then
         -- <interval> can be a function; it triggers whenever it becomes true
         -- <halt> can be a function, or nil to disable it
         local params = {...}
+        local timer = co._create_timer()
         function routine()
-            local timer = co._create_timer()
             local delay = delay
             local ongoing = duration
             timer.last_tick = os.clock()
@@ -51,7 +51,9 @@ if not co then
                 coroutine.yield(0)
             end
             if timer.active then
-                if type(ongoing) ~= 'function' then
+                if ongoing == nil or ongoing == 0 then
+                    ongoing = function() return true end
+                elseif type(ongoing) ~= 'function' then
                     timer.end_time = os.clock() + duration
                     ongoing = function()
                         return os.clock() < timer.end_time
@@ -129,134 +131,43 @@ if not co then
         -- Calls <func> with remaining parameters after <delay>
         -- <delay> can be in seconds, or a function
         -- When <delay> is a function the trigger happens when it stops being true
-        local params = {...}
-        local timer = co._create_timer()
-        function routine()
-            local delay = delay
-            timer.last_tick = os.clock()
-            timer.after_time = timer.last_tick
-            if type(delay) ~= 'function' then
-                timer.after_time = timer.after_time + delay
-                delay = function()
-                    return os.clock() < timer.after_time
-                end
-            end
-            while timer.active and (timer.paused or delay()) do
-                if timer.paused then
-                    timer.after_time = timer.after_time + (os.clock() - timer.last_tick)
-                end
-                timer.last_tick = os.clock()
-                coroutine.yield(0)
-            end
-            if timer.active then
-                func(unpack(params))
-            end
-            co.stop(timer.id)
-            return 1
-        end
-        startLuaCoroutine(self, 'routine')
-        return timer.id
+        return co.schedule(delay, nil, 1, 0, nil, func, unpack({...}))
     end
 
     function co.during(duration, func, ...)
         -- Calls <func> every tick with remaining parameters for <duration>
         -- <duration> can be in seconds, or a function
         -- When <duration> is a function calls will stop when it stops being true
-        local params = {...}
-        local timer = co._create_timer()
-        function routine()
-            local ongoing = duration
-            if type(duration) ~= 'function' then
-                local until_time = os.clock() + duration
-                ongoing = function()
-                    return os.clock() < until_time
-                end
-            end
-            while timer.active and ongoing() do
-                if not timer.paused then
-                    func(unpack(params))
-                end
-                coroutine.yield(0)
-            end
-            co.stop(timer.id)
-            return 1
-        end
-        startLuaCoroutine(self, 'routine')
-        return timer.id
+        return co.schedule(0, duration, nil, 0, nil, func, unpack({...}))
     end
 
-    function co.every_until(interval, till, func, ...)
-        -- Calls <func> with remaining parameters repeatedly, with a gap of <delay> seconds between
-        -- If <delay> is a function then triggers every time it becomes true
-        -- <delay> should have no side effects, and be consistent within a tick
-        -- If <func> returns <stop_on> then the coroutine stops, unless <stop_on> is nil
-        local params = {...}
-        local timer = co._create_timer()
-        function routine()
-            timer.last_tick = os.clock()
-            timer.next_time = timer.last_tick
-            local triggered
-            if type(interval) ~= 'function' then
-                timer.step = interval
-                timer.set_next_time = function()
-                    timer.next_time = timer.next_time + timer.step
-                end
-                timer.set_next_time()
-                triggered = function()
-                    local result = os.clock() > timer.next_time
-                    if result then
-                        timer.set_next_time()
-                    end
-                    return result
-                end
-            else
-                timer.state = interval()
-                triggered = function()
-                    local result = interval()
-                    if timer.state == result then
-                        result = false
-                    else
-                        timer.state = result
-                    end
-                    return result
-                end
-            end
-            local stop_on = till
-            if till ~= nil then
-                if type(till) ~= 'function' then
-                    stop_on = function()
-                        return till
-                    end
-                end
-            end
-            while timer.active do
-                if timer.paused then
-                    timer.next_time = timer.next_time + (os.clock() - timer.last_tick)
-                else
-                    if triggered() then
-                        local result = func(unpack(params))
-                        if stop_on ~= nil and result == stop_on() then
-                            timer.active = false
-                        end
-                    end
-                end
-                timer.last_tick = os.clock()
-                coroutine.yield(0)
-            end
-            co.stop(timer.id)
-            return 1
-        end
-        startLuaCoroutine(self, 'routine')
-        return timer.id
+    function co.during_until(duration, halt, func, ...)
+        -- Calls <func> every tick with remaining parameters for <duration>
+        -- <duration> can be in seconds, or a function
+        -- When <duration> is a function calls will stop when it stops being true
+        -- If <func> returns <halt> then the coroutine stops
+        return co.schedule(0, duration, nil, 0, halt, func, unpack({...}))
     end
 
-    function co.every(delay, func, ...)
-        co.every_until(delay, nil, func, unpack({...}))
+    function co.every(interval, func, ...)
+        -- Calls <func> with remaining parameters repeatedly, with a gap of <interval> seconds between
+        -- If <interval> is a function then triggers every time it becomes true
+        -- <interval> should have no side effects, and be consistent within a tick
+        return co.schedule(0, nil, nil, interval, nil, func, unpack({...}))
+    end
+
+    function co.every_until(interval, halt, func, ...)
+        -- Calls <func> with remaining parameters repeatedly, with a gap of <interval> seconds between
+        -- If <interval> is a function then triggers every time it becomes true
+        -- <interval> should have no side effects, and be consistent within a tick
+        -- If <func> returns <halt> then the coroutine stops
+        return co.schedule(0, nil, nil, interval, halt, func, unpack({...}))
     end
 
 
     -- camelCase
     co.everyUntil = co.every_until
+    co.duringUntil = co.during_until
 
 
     -- Internal
