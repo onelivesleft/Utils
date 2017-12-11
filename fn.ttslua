@@ -1,0 +1,33 @@
+if not fn then
+    fn = {}
+
+
+    -- Exposed methods:
+
+    function fn.map(list, func)
+        local mapped = {}
+        for k, v in pairs(list) do
+            mapped[k] = func(v)
+        end
+        return map
+    end
+
+    function fn.filter(list, func)
+        local filtered = {}
+        for k, v in pairs(list) do
+            if func(v) then
+                filtered[k] = v
+            end
+        end
+        return filtered
+    end
+
+    function fn.reduce(list, func, initial)
+        local reduced = initial
+        if reduced == nil then reduced = 0 end
+        for k, v in pairs(list) do
+            reduced = func(reduced, v)
+        end
+        return reduced
+    end
+end
