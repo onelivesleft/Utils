@@ -9,7 +9,7 @@ if not fn then
         for k, v in pairs(list) do
             mapped[k] = func(v)
         end
-        return map
+        return mapped
     end
 
     function fn.filter(list, func)
